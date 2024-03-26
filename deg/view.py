@@ -27,9 +27,11 @@ async def get_list(
 async def get_by_id(id: str):
     return await DegWidgetModel.get(id)
 
+
 @deg_widgets_router.post('/', response_model=DegWidgetModel, response_model_by_alias=False)
 async def save(data: DegWidgetModel):
     return await data.save()
+
 
 @deg_widgets_router.delete('/{id}', response_model=DegWidgetModel | None, response_model_by_alias=False)
 async def get_by_id(id: str):
@@ -37,4 +39,3 @@ async def get_by_id(id: str):
     if d_widget:
         await d_widget.delete()
     return d_widget
-
