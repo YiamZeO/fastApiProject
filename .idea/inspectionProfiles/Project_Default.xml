@@ -1,0 +1,29 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="9">
+            <item index="0" class="java.lang.String" itemvalue="typing_extensions" />
+            <item index="1" class="java.lang.String" itemvalue="hpy" />
+            <item index="2" class="java.lang.String" itemvalue="mongoengine" />
+            <item index="3" class="java.lang.String" itemvalue="greenlet" />
+            <item index="4" class="java.lang.String" itemvalue="pymongo" />
+            <item index="5" class="java.lang.String" itemvalue="Django" />
+            <item index="6" class="java.lang.String" itemvalue="cffi" />
+            <item index="7" class="java.lang.String" itemvalue="djangorestframework" />
+            <item index="8" class="java.lang.String" itemvalue="readline" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="N806" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
