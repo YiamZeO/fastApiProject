@@ -22,3 +22,13 @@ async def get_aos_and_districts():
 @mesh_router.get('/ages/', response_model=ResponseObject)
 async def get_ages_data():
     return await MeshService.get_ages_data()
+
+
+@mesh_router.get('/os/', response_model=ResponseObject)
+async def get_os_data():
+    return await MeshService.get_os_data()
+
+
+@mesh_router.get('/devices/', response_model=ResponseObject)
+async def get_devices_data():
+    return await MeshService.get_devices_data()

@@ -55,9 +55,7 @@ class MeshService:
                 } for k, v in aos_districts.items()])
 
     @classmethod
-    async def get_ages_data(cls):
-        source = f'{cls.schema}.{cls.categories_config_map['ages'].table}'
-        sql = f'select * from {source} where from_dt  = (select max(from_dt) from {source}) order by section, age_range'
+    async def __get_data_type_1(cls, sql, meta_value_name, column_value_name):
         async with await clickhouse_holder.get_connection() as conn:
             async with conn.cursor(cursor=DictCursor) as cursor:
                 await cursor.execute(sql)
@@ -66,13 +64,31 @@ class MeshService:
                     data=list(),
                     meta={
                         'section_values': set(),
-                        'age_range_values': set()
+                        meta_value_name: set()
                     }
                 )
                 response.meta['date'] = data[0]['from_dt']
                 for row in data:
                     response.meta['section_values'].add(row['section'])
-                    response.meta['age_range_values'].add(row['age_range'])
+                    response.meta[meta_value_name].add(row[column_value_name])
                     response.data.append({k: v for k, v in row.items() if k != 'from_dt'})
-                response.meta['age_range_values'] = sorted(response.meta['age_range_values'])
+                response.meta[meta_value_name] = sorted(response.meta[meta_value_name])
                 return response
+
+    @classmethod
+    async def get_ages_data(cls):
+        source = f'{cls.schema}.{cls.categories_config_map['ages'].table}'
+        sql = f'select * from {source} where from_dt  = (select max(from_dt) from {source}) order by section, age_range'
+        return await cls.__get_data_type_1(sql, 'age_range_values', 'age_range')
+
+    @classmethod
+    async def get_os_data(cls):
+        source = f'{cls.schema}.{cls.categories_config_map['os'].table}'
+        sql = f'select * from {source} where from_dt  = (select max(from_dt) from {source}) order by section, user_agent_os_family'
+        return await cls.__get_data_type_1(sql, 'user_agent_os_family_values', 'user_agent_os_family')
+
+    @classmethod
+    async def get_devices_data(cls):
+        source = f'{cls.schema}.{cls.categories_config_map['devices'].table}'
+        sql = f'select * from {source} where from_dt  = (select max(from_dt) from {source}) order by section, device'
+        return await cls.__get_data_type_1(sql, 'device_values', 'device')
