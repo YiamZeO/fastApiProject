@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI
 
 from deg.view import deg_widgets_router
+from mesh.view import mesh_router
 from settings import clickhouse_holder, mongo_beanie_init, mongo_beanie_close
 
 logging.basicConfig(level=logging.INFO)
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 app.include_router(deg_widgets_router)
+app.include_router(mesh_router)
 
 
 @app.on_event('startup')
