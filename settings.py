@@ -43,7 +43,7 @@ class ClickHouseHolder:
             if self.password:
                 config['password'] = self.password
             self.__connection_pool = await asynch.create_pool(**config)
-        return await self.__connection_pool.acquire()
+        return self.__connection_pool.acquire()
 
     async def close_pool(self):
         if self.__connection_pool:

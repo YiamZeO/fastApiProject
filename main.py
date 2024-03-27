@@ -15,11 +15,9 @@ app.include_router(deg_widgets_router)
 
 @app.on_event('startup')
 async def startup():
-    conn = await clickhouse_holder.get_connection()
-    logger.info(f'{await clickhouse_holder.connection_pool} ClickHouse pool created')
-    logger.info(f'{conn} ClickHouse test connection opened')
-    await conn.close()
-    logger.info(f'{conn} ClickHouse test connection closed')
+    async with await clickhouse_holder.get_connection() as conn:
+        async with conn.cursor() as cursor:
+            logger.info(f'{await clickhouse_holder.connection_pool} ClickHouse pool created')
     await mongo_beanie_init()
 
 
