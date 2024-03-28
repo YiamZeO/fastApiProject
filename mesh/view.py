@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter
 
 from mesh.service import MeshService
@@ -32,3 +34,23 @@ async def get_os_data():
 @mesh_router.get('/devices/', response_model=ResponseObject)
 async def get_devices_data():
     return await MeshService.get_devices_data()
+
+
+@mesh_router.get('/visits/', response_model=ResponseObject)
+async def get_visits_data(
+        product: str,
+        segment: str,
+        date_from: date,
+        date_to: date
+):
+    return await MeshService.get_visits_data(product, segment, date_from, date_to)
+
+
+@mesh_router.get('/uniq_users/', response_model=ResponseObject)
+async def get_uniq_users_data(
+        product: str,
+        segment: str,
+        date_from: date,
+        date_to: date
+):
+    return await MeshService.get_uniq_users_data(product, segment, date_from, date_to)

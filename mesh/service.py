@@ -1,7 +1,7 @@
 from asynch.cursors import DictCursor
 
 from settings import clickhouse_holder
-from utils.utils import ResponseObject
+from utils.utils import ResponseObject, date_condition_from_segment
 
 
 class MeshService:
@@ -92,3 +92,32 @@ class MeshService:
         source = f'{cls.schema}.{cls.categories_config_map['devices'].table}'
         sql = f'select * from {source} where from_dt  = (select max(from_dt) from {source}) order by section, device'
         return await cls.__get_data_type_1(sql, 'device_values', 'device')
+
+    @classmethod
+    async def __get_data_type_2(cls, source, product, segment, date_from, date_to):
+        sql = (f'select from_dt, kol_vo from {source} where section = %(product)s and agg_type = %(segment)s and'
+               f' {date_condition_from_segment(segment)} order by from_dt')
+        params = {
+            'product': product,
+            'segment': segment,
+            'date_from': date_from,
+            'date_to': date_to
+        }
+        async with await clickhouse_holder.get_connection() as conn:
+            async with conn.cursor(cursor=DictCursor) as cursor:
+                await cursor.execute(sql, params)
+                data = await cursor.fetchall()
+                return ResponseObject(data=[{
+                    'date': d['from_dt'],
+                    'value': d['kol_vo']
+                } for d in data])
+
+    @classmethod
+    async def get_visits_data(cls, product, segment, date_from, date_to):
+        source = f'{cls.schema}.{cls.categories_config_map['visits'].table}'
+        return await cls.__get_data_type_2(source, product, segment, date_from, date_to)
+
+    @classmethod
+    async def get_uniq_users_data(cls, product, segment, date_from, date_to):
+        source = f'{cls.schema}.{cls.categories_config_map['uniq_users'].table}'
+        return await cls.__get_data_type_2(source, product, segment, date_from, date_to)
