@@ -54,3 +54,11 @@ async def get_uniq_users_data(
         date_to: date
 ):
     return await MeshService.get_uniq_users_data(product, segment, date_from, date_to)
+
+
+@mesh_router.get('/geography/', response_model=ResponseObject)
+async def get_geography_data(
+        g_type: str,
+        g_name: str | None = None,
+):
+    return await MeshService.get_geography_data(g_type, g_name)

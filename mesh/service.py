@@ -1,5 +1,6 @@
 from asynch.cursors import DictCursor
 
+from mesh.model import GeographyModel
 from settings import clickhouse_holder
 from utils.utils import ResponseObject, date_condition_from_segment
 
@@ -60,6 +61,8 @@ class MeshService:
             async with conn.cursor(cursor=DictCursor) as cursor:
                 await cursor.execute(sql)
                 data = await cursor.fetchall()
+                if len(data) == 0:
+                    return ResponseObject(meta='Не получены строки с данными')
                 response = ResponseObject(
                     data=list(),
                     meta={
@@ -121,3 +124,52 @@ class MeshService:
     async def get_uniq_users_data(cls, product, segment, date_from, date_to):
         source = f'{cls.schema}.{cls.categories_config_map['uniq_users'].table}'
         return await cls.__get_data_type_2(source, product, segment, date_from, date_to)
+
+    @classmethod
+    async def get_geography_data(cls, g_type, g_name):
+        source = f'{cls.schema}.{cls.categories_config_map['geography'].table}'
+        sql = (f'select section, :kol_vo, :type_fields from {source} where from_dt  = (select max(from_dt) '
+               f'from {source}) :current_type :group_by order by :type_fields')
+        sql = sql.replace(':current_type', 'and :current_type = %(current_value)s' if g_name else '')
+        sql = sql.replace(':kol_vo', 'kol_vo' if g_type == 'district' else 'sum(kol_vo) kol_vo' if g_type == 'ao' else '')
+        sql = sql.replace(':current_type', 'District' if g_type == 'district' else 'AO' if g_type == 'ao' else '')
+        sql = sql.replace(':type_fields', 'District, AO' if g_type == 'district' else 'AO' if g_type == 'ao' else '')
+        sql = sql.replace(':group_by', '' if g_type == 'district' else 'group by section, AO' if g_type == 'ao' else '')
+        meta = {'data_values': set()}
+        async with await clickhouse_holder.get_connection() as conn:
+            async with conn.cursor(cursor=DictCursor) as cursor:
+                await cursor.execute(sql, {'current_value': g_name} if g_name else None)
+                rows = await cursor.fetchall()
+                if len(rows) == 0:
+                    return ResponseObject(meta='Не получены строки с данными')
+                if g_name:
+                    result = GeographyModel(ao_name=rows[0]['AO'])
+                    if g_type == 'district':
+                        result.district_name = g_name
+                        result.district_data = dict()
+                    elif g_type == 'ao':
+                        result.ao_data = dict()
+                    for row in rows:
+                        meta['data_values'].add(row['section'])
+                        if g_type == 'district':
+                            result.district_data[row['section']] = row['kol_vo']
+                        elif g_type == 'ao':
+                            result.ao_data[row['section']] = row['kol_vo']
+                    return ResponseObject(data=result.model_dump(exclude_none=True), meta=meta)
+                else:
+                    meta[f'{g_type}_name_values'] = set()
+                    names_column = 'District' if g_type == 'district' else 'AO' if g_type == 'ao' else ''
+                    all_names = {row[names_column] for row in rows}
+                    data = {n: GeographyModel(district_data=dict()) if g_type == 'district' else GeographyModel(ao_data=dict())
+                            for n in all_names}
+                    for row in rows:
+                        meta[f'{g_type}_name_values'].add(row[names_column])
+                        meta['data_values'].add(row['section'])
+                        data[row[names_column]].ao_name = row['AO']
+                        if g_type == 'district':
+                            data[row[names_column]].district_name = row[names_column]
+                            data[row[names_column]].district_data[row['section']] = row['kol_vo']
+                        elif g_type == 'ao':
+                            data[row[names_column]].ao_data[row['section']] = row['kol_vo']
+                    meta[f'{g_type}_name_values'] = sorted(meta[f'{g_type}_name_values'])
+                    return ResponseObject(data=[data[k].model_dump(exclude_none=True) for k in sorted(data)], meta=meta)
