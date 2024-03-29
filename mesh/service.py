@@ -1,4 +1,7 @@
+from io import BytesIO
+
 from asynch.cursors import DictCursor
+from openpyxl.workbook import Workbook
 
 from mesh.model import GeographyModel
 from settings import clickhouse_holder
@@ -11,7 +14,7 @@ class MeshService:
             self.r_name = r_name
             self.table = table
 
-    schema = 'mesh'
+    __schema = 'mesh'
     categories_config_map = {
         'visits': CategoryConfig('Визиты', 'sessions'),
         'uniq_users': CategoryConfig('Уникальные пользователи', 'uniqusers'),
@@ -32,7 +35,7 @@ class MeshService:
     async def get_date_ranges(cls, category):
         if category not in cls.categories_config_map:
             return ResponseObject(meta=f'Для категории {category} не задана таблица')
-        sql = f'select  min(from_dt) as min,  max(from_dt) as max from {cls.schema}.{cls.categories_config_map[category].table}'
+        sql = f'select  min(from_dt) as min,  max(from_dt) as max from {cls.__schema}.{cls.categories_config_map[category].table}'
         async with await clickhouse_holder.get_connection() as conn:
             async with conn.cursor(cursor=DictCursor) as cursor:
                 await cursor.execute(sql)
@@ -40,7 +43,7 @@ class MeshService:
 
     @classmethod
     async def get_aos_and_districts(cls):
-        source = f'{cls.schema}.{cls.categories_config_map['geography'].table}'
+        source = f'{cls.__schema}.{cls.categories_config_map['geography'].table}'
         sql = (f'select distinct AO, District from {source} where '
                f'from_dt  = (select max(from_dt) from {source}) order by AO')
         async with await clickhouse_holder.get_connection() as conn:
@@ -80,19 +83,19 @@ class MeshService:
 
     @classmethod
     async def get_ages_data(cls):
-        source = f'{cls.schema}.{cls.categories_config_map['ages'].table}'
+        source = f'{cls.__schema}.{cls.categories_config_map['ages'].table}'
         sql = f'select * from {source} where from_dt  = (select max(from_dt) from {source}) order by section, age_range'
         return await cls.__get_data_type_1(sql, 'age_range_values', 'age_range')
 
     @classmethod
     async def get_os_data(cls):
-        source = f'{cls.schema}.{cls.categories_config_map['os'].table}'
+        source = f'{cls.__schema}.{cls.categories_config_map['os'].table}'
         sql = f'select * from {source} where from_dt  = (select max(from_dt) from {source}) order by section, user_agent_os_family'
         return await cls.__get_data_type_1(sql, 'user_agent_os_family_values', 'user_agent_os_family')
 
     @classmethod
     async def get_devices_data(cls):
-        source = f'{cls.schema}.{cls.categories_config_map['devices'].table}'
+        source = f'{cls.__schema}.{cls.categories_config_map['devices'].table}'
         sql = f'select * from {source} where from_dt  = (select max(from_dt) from {source}) order by section, device'
         return await cls.__get_data_type_1(sql, 'device_values', 'device')
 
@@ -117,17 +120,17 @@ class MeshService:
 
     @classmethod
     async def get_visits_data(cls, product, segment, date_from, date_to):
-        source = f'{cls.schema}.{cls.categories_config_map['visits'].table}'
+        source = f'{cls.__schema}.{cls.categories_config_map['visits'].table}'
         return await cls.__get_data_type_2(source, product, segment, date_from, date_to)
 
     @classmethod
     async def get_uniq_users_data(cls, product, segment, date_from, date_to):
-        source = f'{cls.schema}.{cls.categories_config_map['uniq_users'].table}'
+        source = f'{cls.__schema}.{cls.categories_config_map['uniq_users'].table}'
         return await cls.__get_data_type_2(source, product, segment, date_from, date_to)
 
     @classmethod
     async def get_geography_data(cls, g_type, g_name):
-        source = f'{cls.schema}.{cls.categories_config_map['geography'].table}'
+        source = f'{cls.__schema}.{cls.categories_config_map['geography'].table}'
         sql = (f'select section, :kol_vo, :type_fields from {source} where from_dt  = (select max(from_dt) '
                f'from {source}) :current_type :group_by order by :type_fields')
         sql = sql.replace(':current_type', 'and :current_type = %(current_value)s' if g_name else '')
@@ -173,3 +176,11 @@ class MeshService:
                             data[row[names_column]].ao_data[row['section']] = row['kol_vo']
                     meta[f'{g_type}_name_values'] = sorted(meta[f'{g_type}_name_values'])
                     return ResponseObject(data=[data[k].model_dump(exclude_none=True) for k in sorted(data)], meta=meta)
+
+    @classmethod
+    def report_download(cls):
+        wb = Workbook()
+        ws = wb.active
+        ws['A1'] = 'Hello, world!'
+        ws.append([1, 2, 3])
+        return wb
