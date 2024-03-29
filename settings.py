@@ -17,7 +17,7 @@ async def mongo_beanie_init():
     logger.info(f'{mongodb_beanie_client} Beanie initialized')
 
 
-async def mongo_beanie_close():
+def mongo_beanie_close():
     mongodb_beanie_client.close()
     logger.info(f'{mongodb_beanie_client} Beanie closed')
 
@@ -32,7 +32,7 @@ class ClickHouseHolder:
         self.__connection_pool = None
 
     @property
-    async def connection_pool(self):
+    def connection_pool(self):
         return self.__connection_pool
 
     async def get_connection(self):

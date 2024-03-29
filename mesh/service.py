@@ -1,5 +1,3 @@
-from io import BytesIO
-
 from asynch.cursors import DictCursor
 from openpyxl.workbook import Workbook
 
@@ -178,7 +176,8 @@ class MeshService:
                     return ResponseObject(data=[data[k].model_dump(exclude_none=True) for k in sorted(data)], meta=meta)
 
     @classmethod
-    def report_download(cls):
+    async def report_download(cls, filter):
+        print(filter)
         wb = Workbook()
         ws = wb.active
         ws['A1'] = 'Hello, world!'

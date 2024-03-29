@@ -1,6 +1,7 @@
 import io
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Depends
 from pydantic import BaseModel
@@ -68,7 +69,7 @@ async def get_geography_data(
     return await MeshService.get_geography_data(g_type, g_name)
 
 
-class ReportQueryParams(BaseModel):
+class ReportFilter(BaseModel):
     category: str
     product: str | None = None
     segment: str | None = None
@@ -78,13 +79,24 @@ class ReportQueryParams(BaseModel):
     g_type: str | None = None
 
 
+def validate_report_filter(report_filter):
+    pass
+
+
 @mesh_router.get('/report/download/', response_class=StreamingResponse,
                  responses={200: {'content': {
                      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {'example': ''}}}})
-async def report_download(query_params: Annotated[ReportQueryParams, Depends()]):
+async def report_download(report_filter: Annotated[ReportFilter, Depends()]):
+    validate_report_filter(report_filter)
     output = io.BytesIO()
-    MeshService.report_download().save(output)
-    output.seek(0)
-    response = StreamingResponse(output, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response.headers['Content-Disposition'] = 'attachment; filename="report.xlsx"'
-    return response
+    if report_filter.category in MeshService.categories_config_map:
+        (await MeshService.report_download(report_filter.model_dump(exclude_none=True))).save(output)
+        output.seek(0)
+        file_name = (f'{MeshService.categories_config_map[report_filter.category].r_name.replace(' ', '_')}_'
+                     f'{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx')
+        response = StreamingResponse(output,
+                                     media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response.headers['Content-Disposition'] = f'attachment; filename*=UTF-8\'\'{quote(file_name)}'
+        return response
+    else:
+        return StreamingResponse(f'Категория {report_filter.category} не определена', media_type='text/plain')

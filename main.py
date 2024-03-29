@@ -19,13 +19,13 @@ app.include_router(mesh_router)
 async def startup():
     async with await clickhouse_holder.get_connection() as conn:
         async with conn.cursor() as cursor:
-            logger.info(f'{await clickhouse_holder.connection_pool} ClickHouse pool created')
+            logger.info(f'{clickhouse_holder.connection_pool} ClickHouse pool created')
     await mongo_beanie_init()
 
 
 @app.on_event('shutdown')
 async def shutdown():
-    await mongo_beanie_close()
-    pool = str(await clickhouse_holder.connection_pool)
+    mongo_beanie_close()
+    pool = str(clickhouse_holder.connection_pool)
     await clickhouse_holder.close_pool()
     logger.info(f'{pool} ClickHouse pool closed')
