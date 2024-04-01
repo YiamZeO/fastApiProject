@@ -80,14 +80,20 @@ class ReportFilter(BaseModel):
 
 
 def validate_report_filter(report_filter):
-    pass
+    if report_filter.category == 'visits' or report_filter.category == 'uniq_users':
+        return ReportFilter(category=report_filter.category, product=report_filter.product, segment=report_filter.segment,
+                            date_from=report_filter.date_from, date_to=report_filter.date_to)
+    elif report_filter.category == 'geography':
+        return ReportFilter(category=report_filter.category, g_name=report_filter.g_name, g_type=report_filter.g_type)
+    else:
+        return ReportFilter(category=report_filter.category)
 
 
 @mesh_router.get('/report/download/', response_class=StreamingResponse,
                  responses={200: {'content': {
                      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {'example': ''}}}})
 async def report_download(report_filter: Annotated[ReportFilter, Depends()]):
-    validate_report_filter(report_filter)
+    report_filter = validate_report_filter(report_filter)
     output = io.BytesIO()
     if report_filter.category in MeshService.categories_config_map:
         (await MeshService.report_download(report_filter.model_dump(exclude_none=True))).save(output)

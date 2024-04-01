@@ -1,4 +1,7 @@
+import logging
+
 from asynch.cursors import DictCursor
+from openpyxl.styles import Font, Alignment
 from openpyxl.workbook import Workbook
 
 from mesh.model import GeographyModel
@@ -23,10 +26,10 @@ class MeshService:
     }
     filters_map = {
         'segment': 'Сегмент',
-        'from': 'Начало периода',
-        'to': 'Конец периода',
+        'date_from': 'Начало периода',
+        'date_to': 'Конец периода',
         'product': 'Продукт',
-        'type': 'Тип'
+        'g_type': 'Тип'
     }
 
     @classmethod
@@ -132,7 +135,8 @@ class MeshService:
         sql = (f'select section, :kol_vo, :type_fields from {source} where from_dt  = (select max(from_dt) '
                f'from {source}) :current_type :group_by order by :type_fields')
         sql = sql.replace(':current_type', 'and :current_type = %(current_value)s' if g_name else '')
-        sql = sql.replace(':kol_vo', 'kol_vo' if g_type == 'district' else 'sum(kol_vo) kol_vo' if g_type == 'ao' else '')
+        sql = sql.replace(':kol_vo',
+                          'kol_vo' if g_type == 'district' else 'sum(kol_vo) kol_vo' if g_type == 'ao' else '')
         sql = sql.replace(':current_type', 'District' if g_type == 'district' else 'AO' if g_type == 'ao' else '')
         sql = sql.replace(':type_fields', 'District, AO' if g_type == 'district' else 'AO' if g_type == 'ao' else '')
         sql = sql.replace(':group_by', '' if g_type == 'district' else 'group by section, AO' if g_type == 'ao' else '')
@@ -161,7 +165,8 @@ class MeshService:
                     meta[f'{g_type}_name_values'] = set()
                     names_column = 'District' if g_type == 'district' else 'AO' if g_type == 'ao' else ''
                     all_names = {row[names_column] for row in rows}
-                    data = {n: GeographyModel(district_data=dict()) if g_type == 'district' else GeographyModel(ao_data=dict())
+                    data = {n: GeographyModel(district_data=dict()) if g_type == 'district' else GeographyModel(
+                        ao_data=dict())
                             for n in all_names}
                     for row in rows:
                         meta[f'{g_type}_name_values'].add(row[names_column])
@@ -177,9 +182,84 @@ class MeshService:
 
     @classmethod
     async def report_download(cls, filter):
-        print(filter)
         wb = Workbook()
         ws = wb.active
-        ws['A1'] = 'Hello, world!'
-        ws.append([1, 2, 3])
+        category = filter.pop('category')
+        ws.title = cls.categories_config_map.get(category).r_name
+        header_font = Font(size=12, bold=True)
+        value_font = Font(size=12, bold=False)
+        wrap_alignment = Alignment(wrap_text=True, horizontal='center', vertical='center')
+        row_num = 1
+
+        def __set_cell(cell, value, font, alignment):
+            cell.value = value
+            if font:
+                cell.font = font
+            if alignment:
+                cell.alignment = alignment
+
+        if category == 'visits' or category == 'uniq_users':
+            for f_name in filter:
+                filter_name_cell = ws.cell(row=row_num, column=1)
+                __set_cell(filter_name_cell, cls.filters_map[f_name] + ': ', header_font, wrap_alignment)
+
+                filter_value_cell = ws.cell(row=row_num, column=2)
+                cell_value = None
+                if f_name == 'date_from' or f_name == 'date_to':
+                    cell_value = filter[f_name].strftime('%d.%m.%Y')
+                elif f_name == 'segment':
+                    match filter[f_name]:
+                        case 'date':
+                            cell_value = 'День'
+                        case 'year':
+                            cell_value = 'Год'
+                        case 'month':
+                            cell_value = 'Месяц'
+                        case 'weekofyear':
+                            cell_value = 'Неделя'
+                else:
+                    cell_value = filter[f_name]
+                __set_cell(filter_value_cell, cell_value, value_font, wrap_alignment)
+                row_num += 1
+        elif category in ['devices', 'os', 'ages', 'geography']:
+            filter_name_cell = ws.cell(row=row_num, column=1)
+            __set_cell(filter_name_cell, 'Дата: ', header_font, wrap_alignment)
+
+            filter_value_cell = ws.cell(row=row_num, column=2)
+            __set_cell(filter_value_cell, (await cls.get_date_ranges(category)).data['max'].strftime('%d.%m.%Y'),
+                           value_font, wrap_alignment)
+
+            if category == 'geography':
+                row_num += 1
+                filter_name_cell = ws.cell(row=row_num, column=1)
+                __set_cell(filter_name_cell, 'Тип: ', header_font, wrap_alignment)
+
+                filter_value_cell = ws.cell(row=row_num, column=2)
+                __set_cell(filter_value_cell,
+                               'Районы' if filter['g_type'] == 'district' else 'АО' if filter['g_type'] == 'ao'
+                               else filter['type'], value_font, wrap_alignment)
+        row_num += 2
+
+        def __create_table_type1(table_data, row_num=row_num):
+            data_header_cell = ws.cell(row=row_num, column=1)
+            count_header_cell = ws.cell(row=row_num, column=2)
+            __set_cell(data_header_cell, 'Дата: ', header_font, wrap_alignment)
+            __set_cell(count_header_cell, 'Количество', header_font, wrap_alignment)
+            ws.column_dimensions[data_header_cell.column_letter].width = 20
+            ws.column_dimensions[count_header_cell.column_letter].width = 20
+            row_num += 1
+            for d in table_data:
+                data_value_cell = ws.cell(row=row_num, column=1)
+                count_value_cell = ws.cell(row=row_num, column=2)
+                __set_cell(data_value_cell, d['date'].strftime('%d.%m.%Y'), value_font, wrap_alignment)
+                __set_cell(count_value_cell, d['value'], value_font, wrap_alignment)
+                row_num += 1
+
+        match category:
+            case 'uniq_users':
+                __create_table_type1((await cls.get_uniq_users_data(filter['product'], filter['segment'],
+                                                                    filter['date_from'], filter['date_to'])).data)
+            case 'visits':
+                __create_table_type1((await cls.get_visits_data(filter['product'], filter['segment'],
+                                                                    filter['date_from'], filter['date_to'])).data)
         return wb
