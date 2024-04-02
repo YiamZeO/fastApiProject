@@ -66,7 +66,9 @@ async def get_geography_data(
         g_type: str,
         g_name: str | None = None,
 ):
-    return await MeshService.get_geography_data(g_type, g_name)
+    res = await MeshService.get_geography_data(g_type, g_name)
+    res.data = [d.model_dump(exclude_none=True) for d in res.data]
+    return res
 
 
 class ReportFilter(BaseModel):
@@ -75,7 +77,6 @@ class ReportFilter(BaseModel):
     segment: str | None = None
     date_from: date | None = None
     date_to: date | None = None
-    g_name: str | None = None
     g_type: str | None = None
 
 
@@ -84,7 +85,7 @@ def validate_report_filter(report_filter):
         return ReportFilter(category=report_filter.category, product=report_filter.product, segment=report_filter.segment,
                             date_from=report_filter.date_from, date_to=report_filter.date_to)
     elif report_filter.category == 'geography':
-        return ReportFilter(category=report_filter.category, g_name=report_filter.g_name, g_type=report_filter.g_type)
+        return ReportFilter(category=report_filter.category, g_type=report_filter.g_type)
     else:
         return ReportFilter(category=report_filter.category)
 

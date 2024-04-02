@@ -78,7 +78,7 @@ class MeshService:
                 for row in data:
                     response.meta['section_values'].add(row['section'])
                     response.meta[meta_value_name].add(row[column_value_name])
-                    response.data.append({k: v for k, v in row.items() if k != 'from_dt'})
+                    response.data.append({'value' if k == 'kol_vo' else k: v for k, v in row.items() if k != 'from_dt'})
                 response.meta[meta_value_name] = sorted(response.meta[meta_value_name])
                 return response
 
@@ -130,7 +130,7 @@ class MeshService:
         return await cls.__get_data_type_2(source, product, segment, date_from, date_to)
 
     @classmethod
-    async def get_geography_data(cls, g_type, g_name):
+    async def get_geography_data(cls, g_type, g_name=None):
         source = f'{cls.__schema}.{cls.categories_config_map['geography'].table}'
         sql = (f'select section, :kol_vo, :type_fields from {source} where from_dt  = (select max(from_dt) '
                f'from {source}) :current_type :group_by order by :type_fields')
@@ -178,7 +178,7 @@ class MeshService:
                         elif g_type == 'ao':
                             data[row[names_column]].ao_data[row['section']] = row['kol_vo']
                     meta[f'{g_type}_name_values'] = sorted(meta[f'{g_type}_name_values'])
-                    return ResponseObject(data=[data[k].model_dump(exclude_none=True) for k in sorted(data)], meta=meta)
+                    return ResponseObject(data=[data[k] for k in sorted(data)], meta=meta)
 
     @classmethod
     async def report_download(cls, filter):
@@ -227,7 +227,7 @@ class MeshService:
 
             filter_value_cell = ws.cell(row=row_num, column=2)
             __set_cell(filter_value_cell, (await cls.get_date_ranges(category)).data['max'].strftime('%d.%m.%Y'),
-                           value_font, wrap_alignment)
+                       value_font, wrap_alignment)
 
             if category == 'geography':
                 row_num += 1
@@ -236,8 +236,8 @@ class MeshService:
 
                 filter_value_cell = ws.cell(row=row_num, column=2)
                 __set_cell(filter_value_cell,
-                               'Районы' if filter['g_type'] == 'district' else 'АО' if filter['g_type'] == 'ao'
-                               else filter['type'], value_font, wrap_alignment)
+                           'Районы' if filter['g_type'] == 'district' else 'АО' if filter['g_type'] == 'ao'
+                           else filter['type'], value_font, wrap_alignment)
         row_num += 2
 
         def __create_table_type1(table_data, row_num=row_num):
@@ -255,11 +255,65 @@ class MeshService:
                 __set_cell(count_value_cell, d['value'], value_font, wrap_alignment)
                 row_num += 1
 
+        def __create_table_type2(data, row_names_meta, column_value_name, row_num=row_num):
+            column_names = [c for c in data.meta['section_values']]
+            header_i = 2
+            for c in column_names:
+                header_cell = ws.cell(row=row_num, column=header_i)
+                __set_cell(header_cell, c, header_font, wrap_alignment)
+                ws.column_dimensions[header_cell.column_letter].width = 20
+                header_i += 1
+            row_num += 1
+            rows_data = {k: dict() for k in data.meta[row_names_meta]}
+            for d in data.data:
+                rows_data[d[column_value_name]][d['section']] = d['value']
+            for k in sorted(rows_data):
+                col_i = 2
+                header_cell = ws.cell(row=row_num, column=1)
+                __set_cell(header_cell, k, header_font, wrap_alignment)
+                ws.column_dimensions[header_cell.column_letter].width = 20
+                for c in column_names:
+                    value_cell = ws.cell(row=row_num, column=col_i)
+                    __set_cell(value_cell, int(rows_data[k][c]) if c in rows_data[k] else 0, value_font, wrap_alignment)
+                    col_i += 1
+                row_num += 1
+
+        def __create_geography_table(data, row_num=row_num):
+            column_names = [c for c in data.meta['data_values']]
+            header_i = 2
+            for c in column_names:
+                header_cell = ws.cell(row=row_num, column=header_i)
+                __set_cell(header_cell, c, header_font, wrap_alignment)
+                ws.column_dimensions[header_cell.column_letter].width = 20
+                header_i += 1
+            row_num += 1
+            rows_data = data.data
+            for r in sorted(rows_data, key=lambda g: g.district_name if filter['g_type'] == 'district' else g.ao_name if filter['g_type'] == 'ao' else None):
+                row_name = r.district_name if filter['g_type'] == 'district' else r.ao_name if filter['g_type'] == 'ao' else None
+                row_values = r.district_data if filter['g_type'] == 'district' else r.ao_data if filter['g_type'] == 'ao' else None
+                col_i = 2
+                header_cell = ws.cell(row=row_num, column=1)
+                __set_cell(header_cell, row_name, header_font, wrap_alignment)
+                ws.column_dimensions[header_cell.column_letter].width = 20
+                for c in column_names:
+                    value_cell = ws.cell(row=row_num, column=col_i)
+                    __set_cell(value_cell, int(row_values[c]) if c in row_values else 0, value_font, wrap_alignment)
+                    col_i += 1
+                row_num += 1
+
         match category:
             case 'uniq_users':
                 __create_table_type1((await cls.get_uniq_users_data(filter['product'], filter['segment'],
                                                                     filter['date_from'], filter['date_to'])).data)
             case 'visits':
                 __create_table_type1((await cls.get_visits_data(filter['product'], filter['segment'],
-                                                                    filter['date_from'], filter['date_to'])).data)
+                                                                filter['date_from'], filter['date_to'])).data)
+            case 'devices':
+                __create_table_type2(await cls.get_devices_data(), 'device_values', 'device')
+            case 'os':
+                __create_table_type2(await cls.get_os_data(), 'user_agent_os_family_values', 'user_agent_os_family')
+            case 'ages':
+                __create_table_type2(await cls.get_ages_data(), 'age_range_values', 'age_range')
+            case 'geography':
+                __create_geography_table(await cls.get_geography_data(filter['g_type']))
         return wb
